@@ -1,0 +1,118 @@
+# # docker-compose.yml
+
+# #PRODUCCION - SERVIDOR
+
+# services:
+#   qdrant:
+#     image: qdrant/qdrant:latest
+#     ports:
+#       - "6333:6333"
+#     volumes:
+#       - qdrant_data:/qdrant/storage
+#     restart: always
+#     networks:
+#       - private-gpt_default
+
+#   # Servicio 2: El Ingestor de Datos (se ejecuta una vez y termina)
+#   ingestor:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.backend
+#     command: python ingest.py
+#     environment:
+#       - QDRANT_URL=http://qdrant:6333
+#       - OLLAMA_BASE_URL=http://private-gpt-ollama-cuda-1:11434
+#     depends_on:
+#       - qdrant
+#     networks:
+#       - private-gpt_default
+
+#   # Servicio 3: El Backend (API FastAPI)
+#   backend:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.backend
+#     ports:
+#       - "8000:8000"
+#     environment:
+#       - QDRANT_URL=http://qdrant:6333
+#       - OLLAMA_BASE_URL=http://private-gpt-ollama-cuda-1:11434
+#     depends_on:
+#       - ingestor
+#     restart: always
+#     networks:
+#       - private-gpt_default
+
+#   # Servicio 4: El Frontend (Streamlit)
+#   frontend:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.frontend
+#     ports:
+#       - "8501:8501"
+#     environment:
+#       - API_URL=http://backend:8000/chat
+#     depends_on:
+#       - backend
+#     restart: always
+#     networks:
+#       - private-gpt_default
+
+# networks:
+#   private-gpt_default:
+#     external: true
+
+# volumes:
+#   qdrant_data:
+
+# docker-compose.yml (Para ejecución LOCAL conectada a un servidor REMOTO)
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: always
+
+  ingestor:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    command: python ingest.py
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      # --- CAMBIO CLAVE ---
+      - OLLAMA_BASE_URL=http://10.1.0.176:11434
+    depends_on:
+      - qdrant
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8000:8000"
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      # --- Y TAMBIÉN AQUÍ ---
+      - OLLAMA_BASE_URL=http://10.1.0.176:11434
+    depends_on:
+      - ingestor
+    restart: always
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://backend:8000/chat
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  qdrant_data:

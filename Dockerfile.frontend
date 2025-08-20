@@ -1,0 +1,21 @@
+# Etapa 1: Imagen base
+# Empezamos con la misma imagen de Python que el backend.
+FROM python:3.11-slim
+
+# Etapa 2: Establecer el directorio de trabajo
+WORKDIR /app
+
+# Etapa 3: Instalar dependencias
+# Copiamos el archivo de requisitos e instalamos las librerías.
+COPY requirements.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Etapa 4: Copiar el código de la aplicación
+# En este caso, solo necesitamos el frontend.
+COPY frontend.py .
+
+# Etapa 5: Comando para ejecutar la aplicación
+# Este es el cambio principal. Usamos 'streamlit run'.
+# '--server.port 8501' es el puerto por defecto de Streamlit.
+# '--server.address 0.0.0.0' permite el acceso desde fuera del contenedor.
+CMD ["streamlit", "run", "frontend.py", "--server.port", "8501", "--server.address", "0.0.0.0"]

@@ -1,0 +1,48 @@
+/desarrollo
+/bd_pdf
+pruebas.ipynb
+preguntas_prueba.txt
+
+
+# Entornos virtuales de Python
+venv/
+.venv/
+env/
+.env/
+
+# Archivos de caché y compilados de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Archivos de configuración de IDE y editores
+.vscode/
+.idea/
+*.swp
+
+# Archivos de sistema operativo
+.DS_Store
+Thumbs.db
+
+# Ficheros y carpetas específicas de tu proyecto que no son necesarios
+/desarrollo/
+/bd_pdf/
+pruebas.ipynb
+preguntas_prueba.txt
+*.log
+
+# Archivos de Git (estos nunca deben ir en la imagen)
+.git/
+.gitignore
+
+# Archivos sensibles (aunque ya no lo uses, es buena práctica)
+.env
+
+# Directorios de build y distribución de Docker
+docker-compose.yml
+Dockerfile
+Dockerfile.backend
+Dockerfile.frontend
+.dockerignore
