@@ -1,7 +1,6 @@
 # # docker-compose.yml
 
-# #PRODUCCION - SERVIDOR
-
+# # #PRODUCCION - SERVIDOR
 # services:
 #   qdrant:
 #     image: qdrant/qdrant:latest
@@ -10,10 +9,7 @@
 #     volumes:
 #       - qdrant_data:/qdrant/storage
 #     restart: always
-#     networks:
-#       - private-gpt_default
 
-#   # Servicio 2: El Ingestor de Datos (se ejecuta una vez y termina)
 #   ingestor:
 #     build:
 #       context: .
@@ -21,13 +17,11 @@
 #     command: python ingest.py
 #     environment:
 #       - QDRANT_URL=http://qdrant:6333
-#       - OLLAMA_BASE_URL=http://private-gpt-ollama-cuda-1:11434
+#       # --- CAMBIO CLAVE ---
+#       - OLLAMA_BASE_URL=http://10.1.0.176:11434
 #     depends_on:
 #       - qdrant
-#     networks:
-#       - private-gpt_default
 
-#   # Servicio 3: El Backend (API FastAPI)
 #   backend:
 #     build:
 #       context: .
@@ -36,14 +30,12 @@
 #       - "8000:8000"
 #     environment:
 #       - QDRANT_URL=http://qdrant:6333
-#       - OLLAMA_BASE_URL=http://private-gpt-ollama-cuda-1:11434
+#       # --- Y TAMBIÉN AQUÍ ---
+#       - OLLAMA_BASE_URL=http://10.1.0.176:11434
 #     depends_on:
 #       - ingestor
 #     restart: always
-#     networks:
-#       - private-gpt_default
 
-#   # Servicio 4: El Frontend (Streamlit)
 #   frontend:
 #     build:
 #       context: .
@@ -55,19 +47,31 @@
 #     depends_on:
 #       - backend
 #     restart: always
-#     networks:
-#       - private-gpt_default
-
-# networks:
-#   private-gpt_default:
-#     external: true
 
 # volumes:
 #   qdrant_data:
 
-# # docker-compose.yml (Para ejecución LOCAL conectada a un servidor REMOTO)
-
 services:
+  # --------------------------------------------------------------------
+  # 1. AÑADIMOS EL SERVICIO TRAEFIK
+  # --------------------------------------------------------------------
+  traefik:
+    image: traefik:v2.10
+    command:
+      - "--api.insecure=true"         # Activa el dashboard de Traefik en el puerto 8080
+      - "--providers.docker=true"     # Permite que Traefik detecte otros contenedores
+      - "--providers.docker.exposedbydefault=false" # Solo expone contenedores que le indiquemos
+      - "--entrypoints.web.address=:80" # Establece el puerto 80 como punto de entrada
+    ports:
+      - "80:80"     # Puerto para el tráfico web
+      - "8080:8080" # Puerto para el dashboard
+    volumes:
+      # Permite a Traefik escuchar los eventos de Docker
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - proxy       # Conecta Traefik a nuestra red
+    restart: always
+
   qdrant:
     image: qdrant/qdrant:latest
     ports:
@@ -83,7 +87,6 @@ services:
     command: python ingest.py
     environment:
       - QDRANT_URL=http://qdrant:6333
-      # --- CAMBIO CLAVE ---
       - OLLAMA_BASE_URL=http://10.1.0.176:11434
     depends_on:
       - qdrant
@@ -96,7 +99,6 @@ services:
       - "8000:8000"
     environment:
       - QDRANT_URL=http://qdrant:6333
-      # --- Y TAMBIÉN AQUÍ ---
       - OLLAMA_BASE_URL=http://10.1.0.176:11434
     depends_on:
       - ingestor
@@ -106,13 +108,27 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-    ports:
-      - "8501:8501"
+    # --- 2. ELIMINAMOS EL PUERTO. TRAEFIK SE ENCARGA DE ÉL ---
+    # ports:
+    #   - "8501:8501"
     environment:
       - API_URL=http://backend:8000/chat
     depends_on:
       - backend
     restart: always
+    networks:
+      - proxy # Conectamos el frontend a la misma red de Traefik
+    # --- 3. AÑADIMOS LABELS (ETIQUETAS) PARA TRAEFIK ---
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`chatbot.localhost`)" # URL para acceder
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.services.frontend.loadbalancer.server.port=8501" # Puerto interno del frontend
 
 volumes:
   qdrant_data:
+
+# --- 4. DEFINIMOS LA RED COMPARTIDA ---
+networks:
+  proxy:
+    driver: bridge
