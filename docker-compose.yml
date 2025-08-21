@@ -51,35 +51,51 @@
 # volumes:
 #   qdrant_data:
 
+# docker-compose.yml (Versión Final para Servidor con Traefik)
+
 services:
   # --------------------------------------------------------------------
-  # 1. AÑADIMOS EL SERVICIO TRAEFIK
+  # 1. Proxy Inverso Traefik (La única puerta de entrada)
   # --------------------------------------------------------------------
   traefik:
     image: traefik:v2.10
     command:
-      - "--api.insecure=true"         # Activa el dashboard de Traefik en el puerto 8080
-      - "--providers.docker=true"     # Permite que Traefik detecte otros contenedores
-      - "--providers.docker.exposedbydefault=false" # Solo expone contenedores que le indiquemos
-      - "--entrypoints.web.address=:80" # Establece el puerto 80 como punto de entrada
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
     ports:
       - "80:80"     # Puerto para el tráfico web
-      - "8080:8080" # Puerto para el dashboard
+      - "8080:8080" # Puerto para el dashboard de Traefik
     volumes:
-      # Permite a Traefik escuchar los eventos de Docker
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
-      - proxy       # Conecta Traefik a nuestra red
+      - chatbot-net # Todos los servicios deben estar en la misma red
     restart: always
 
+  # --------------------------------------------------------------------
+  # 2. Base de Datos Vectorial Qdrant
+  # --------------------------------------------------------------------
   qdrant:
     image: qdrant/qdrant:latest
-    ports:
-      - "6333:6333"
+    # No se exponen puertos al exterior; la comunicación es interna.
     volumes:
       - qdrant_data:/qdrant/storage
+    environment:
+      # Asegura que el servicio HTTP se inicie para el healthcheck
+      - QDRANT__SERVICE__HTTP_PORT=6333
     restart: always
+    networks:
+      - chatbot-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
+  # --------------------------------------------------------------------
+  # 3. Ingestor de Datos (se ejecuta una vez)
+  # --------------------------------------------------------------------
   ingestor:
     build:
       context: .
@@ -87,48 +103,132 @@ services:
     command: python ingest.py
     environment:
       - QDRANT_URL=http://qdrant:6333
+      # Apunta a la IP privada del servidor Ollama
       - OLLAMA_BASE_URL=http://10.1.0.176:11434
     depends_on:
-      - qdrant
+      qdrant:
+        condition: service_healthy # Espera a que Qdrant esté saludable
+    networks:
+      - chatbot-net
 
+  # --------------------------------------------------------------------
+  # 4. Backend (API FastAPI)
+  # --------------------------------------------------------------------
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    ports:
-      - "8000:8000"
+    # No se exponen puertos al exterior. Traefik se comunica internamente.
     environment:
       - QDRANT_URL=http://qdrant:6333
       - OLLAMA_BASE_URL=http://10.1.0.176:11434
     depends_on:
-      - ingestor
+      ingestor:
+        condition: service_completed_successfully # Espera a que la ingesta termine
+      qdrant:
+        condition: service_healthy
     restart: always
+    networks:
+      - chatbot-net
+    labels:
+      # Etiqueta para que Traefik sepa que debe gestionar este servicio
+      - "traefik.enable=true"
+      # Crea una regla para exponer la API (opcional, pero buena práctica)
+      # Se accedería a través de http://api.tudominio.com
+      - "traefik.http.routers.backend.rule=Host(`api.chatbot.localhost`)"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
 
+  # --------------------------------------------------------------------
+  # 5. Frontend (Streamlit)
+  # --------------------------------------------------------------------
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-    # --- 2. ELIMINAMOS EL PUERTO. TRAEFIK SE ENCARGA DE ÉL ---
-    # ports:
-    #   - "8501:8501"
     environment:
+      # El frontend habla con el backend a través de la red interna de Docker
       - API_URL=http://backend:8000/chat
     depends_on:
       - backend
     restart: always
     networks:
-      - proxy # Conectamos el frontend a la misma red de Traefik
-    # --- 3. AÑADIMOS LABELS (ETIQUETAS) PARA TRAEFIK ---
+      - chatbot-net
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`chatbot.localhost`)" # URL para acceder
-      - "traefik.http.routers.frontend.entrypoints=web"
-      - "traefik.http.services.frontend.loadbalancer.server.port=8501" # Puerto interno del frontend
+      # La regla principal para acceder a la interfaz de usuario
+      # Deberás cambiar 'chatbot.localhost' por tu dominio real (ej. 'chatbot.miempresa.com')
+      - "traefik.http.routers.frontend.rule=Host(`chatbot.localhost`)"
+      - "traefik.http.services.frontend.loadbalancer.server.port=8501"
 
+# --- Definición de la Red y el Volumen ---
 volumes:
   qdrant_data:
 
-# --- 4. DEFINIMOS LA RED COMPARTIDA ---
 networks:
-  proxy:
+  chatbot-net:
     driver: bridge
+
+
+
+## docker-compose.yml (Versión con Healthcheck)
+# services:
+#   qdrant:
+#     image: qdrant/qdrant:latest
+#     ports:
+#       - "6333:6333"
+#     volumes:
+#       - qdrant_data:/qdrant/storage
+#     restart: always
+#     # --- AÑADE ESTA SECCIÓN ---
+#     healthcheck:
+#       test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+#       interval: 5s
+#       timeout: 3s
+#       retries: 5
+
+#   ingestor:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.backend
+#     command: python ingest.py
+#     environment:
+#       - QDRANT_URL=http://qdrant:6333
+#       - OLLAMA_BASE_URL=http://10.1.0.176:11434 # Asegúrate que esta IP sigue siendo la correcta
+#     # --- MODIFICA ESTA SECCIÓN ---
+#     depends_on:
+#       qdrant:
+#         condition: service_healthy # Espera a que el healthcheck pase
+
+#   backend:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.backend
+#     ports:
+#       - "8000:8000"
+#     environment:
+#       - QDRANT_URL=http://qdrant:6333
+#       - OLLAMA_BASE_URL=http://10.1.0.176:11434
+#     depends_on:
+#       ingestor:
+#         # Esta condición espera a que el ingestor termine con éxito
+#         condition: service_completed_successfully
+#       # AÑADE también una dependencia de la salud de Qdrant por si el ingestor no se ejecuta
+#       qdrant:
+#         condition: service_healthy
+#     restart: always
+
+#   frontend:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.frontend
+#     ports:
+#       # Exponemos el puerto de Streamlit directamente para el acceso local
+#       - "8501:8501"
+#     environment:
+#       - API_URL=http://backend:8000/chat
+#     depends_on:
+#       - backend
+#     restart: always
+
+# volumes:
+  qdrant_data:

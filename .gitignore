@@ -260,3 +260,13 @@ preguntas_prueba.txt
 pruebas.ipynb
 Readme.md
 bd_pdf/
+
+# Archivos y carpetas de desarrollo y pruebas
+desarrollo/
+bd_pdf/
+graph_pruebas/
+Indexacion_hibrida/
+pruebas.ipynb
+preguntas_prueba.txt
+*.log
+README.md

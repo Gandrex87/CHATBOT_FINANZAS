@@ -10,15 +10,19 @@ from langchain_ollama import OllamaEmbeddings
 from rank_bm25 import BM25Okapi
 
 # --- CONFIGURACIÓN ---
-INPUT_JSON_FILE = "contextualized_chunks.json" 
-BM25_INDEX_FILE = "bm25_index.pkl"
-QDRANT_COLLECTION_NAME = "informe_financiero_rag"
+# Mejor práctica: hacemos los nombres de los archivos también configurables
+INPUT_JSON_FILE = os.getenv("INPUT_JSON_FILE", "all_chunks_unificado.json")
+BM25_INDEX_FILE = os.getenv("BM25_INDEX_FILE", "bm25_index_unificado.pkl")
+QDRANT_COLLECTION_NAME = "contabilidad_unificada"
 VECTOR_DIMENSION = 768
 
 # Leemos la configuración desde variables de entorno con valores por defecto
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://10.1.0.176:11434")
 OLLAMA_EMBEDDING_MODEL = "nomic-embed-text:latest" 
+
+
+
 
 def check_if_data_exists(client: QdrantClient) -> bool:
     """Comprueba si la colección ya existe y tiene datos."""

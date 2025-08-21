@@ -1,4 +1,4 @@
-# Hito 4: Indexación Híbrida (Qdrant + BM25) - Versión Corregida
+# Hito 4: Indexación Híbrida (Qdrant + BM25)
 # -----------------------------------------------------------------
 # Objetivo: Cargar los chunks contextualizados y crear dos índices:
 #           1. Un índice vectorial en Qdrant para búsqueda semántica.

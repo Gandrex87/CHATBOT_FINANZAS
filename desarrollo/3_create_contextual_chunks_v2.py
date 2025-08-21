@@ -124,7 +124,7 @@ if __name__ == "__main__":
 
     # Configuración de Ollama
     ollama_base_url = "http://10.1.0.176:11434"
-    ollama_model = "gpt-oss:20b" #llama3.1:latest ,  
+    ollama_model = "gpt-oss:20b" #llama3.1:latest , gpt-oss:20b 
 
     # --- EJECUCIÓN DEL PROCESO COMPLETO ---
     
