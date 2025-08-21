@@ -107,19 +107,39 @@ services:
     networks: # <-- CAMBIO FUNDAMENTAL: Conectado a la red
       - private-gpt_default
 
+  # frontend:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.frontend
+  #   ports:
+  #     - "8501:8501"
+  #   environment:
+  #     - API_URL=http://backend:8000/chat
+  #   depends_on:
+  #     - backend
+  #   restart: always
+  #   networks:
+  #     - private-gpt_default
+
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-    ports:
-      - "8501:8501"
+    # 1. Asegúrate de que los puertos NO estén expuestos directamente
+    # ports:
+    #   - "8501:8501"
     environment:
       - API_URL=http://backend:8000/chat
     depends_on:
       - backend
     restart: always
     networks:
-      - private-gpt_default
+      - private-gpt_default # O la red que estés usando
+    # 2. Añade estas etiquetas para que Traefik lo gestione
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`chatbot.localhost`)"
+      - "traefik.http.services.frontend.loadbalancer.server.port=8501"
 
 networks:
   private-gpt_default:
