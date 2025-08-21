@@ -62,6 +62,8 @@
 
 # docker-compose.yml (Versión Corregida para Servidor)
 
+# docker-compose.yml (Versión Corregida para Servidor, sin Healthcheck)
+
 services:
   qdrant:
     image: qdrant/qdrant:latest
@@ -69,18 +71,12 @@ services:
       - "6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
+    # AÑADIDO: Variable de entorno para asegurar que el puerto HTTP esté activo
     environment:
-      # Asegura que el servicio HTTP se inicie para el healthcheck
       - QDRANT__SERVICE__HTTP_PORT=6333
     restart: always
-    networks: # <-- CORRECCIÓN: Añadido a la red
+    networks:
       - private-gpt_default
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
 
   ingestor:
     build:
@@ -91,11 +87,10 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - OLLAMA_BASE_URL=http://10.1.0.176:11434
     depends_on:
-      qdrant: # <-- CORRECCIÓN: Dependencia robusta
-        condition: service_healthy
-    networks: # <-- CORRECCIÓN: Añadido a la red
+      - qdrant
+    networks: # <-- CAMBIO FUNDAMENTAL: Conectado a la red
       - private-gpt_default
-    restart: on-failure
+    restart: on-failure # <-- AÑADIDO: Estrategia de reintento simple
 
   backend:
     build:
@@ -107,12 +102,9 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - OLLAMA_BASE_URL=http://10.1.0.176:11434
     depends_on:
-      ingestor: # <-- CORRECCIÓN: Dependencia robusta
-        condition: service_completed_successfully
-      qdrant: # <-- CORRECCIÓN: Dependencia robusta
-        condition: service_healthy
+      - ingestor
     restart: always
-    networks: # <-- CORRECCIÓN: Añadido a la red
+    networks: # <-- CAMBIO FUNDAMENTAL: Conectado a la red
       - private-gpt_default
 
   frontend:
@@ -127,9 +119,8 @@ services:
       - backend
     restart: always
     networks:
-      - private-gpt_default # Esto ya estaba correcto
+      - private-gpt_default
 
-# No se necesitan cambios aquí
 networks:
   private-gpt_default:
     external: true
