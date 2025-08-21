@@ -242,6 +242,9 @@
 # docker-compose.yml (Versión final para despliegue)
 #version: '3.8'
 
+# docker-compose.yml (Versión final para despliegue)
+version: '3.8'
+
 services:
   # --------------------------------------------------------------------
   # 1. Proxy Inverso Traefik
@@ -257,7 +260,6 @@ services:
       - "80:80"      # Puerto para el tráfico web
       - "8080:8080"  # Dashboard de Traefik para monitoreo
     volumes:
-      # Montamos el socket de Docker para que Traefik pueda detectar otros contenedores
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - chatbot-net
@@ -270,9 +272,14 @@ services:
     image: qdrant/qdrant:latest
     volumes:
       - qdrant_data:/qdrant/storage
-    restart: always 
+    restart: always
     networks:
       - chatbot-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   # --------------------------------------------------------------------
   # 3. Ingestor de Datos
@@ -286,7 +293,8 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - OLLAMA_BASE_URL=http://10.1.0.176:11434
     depends_on:
-      - qdrant
+      qdrant:
+        condition: service_healthy
     networks:
       - chatbot-net
     restart: "no"
@@ -302,18 +310,19 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - OLLAMA_BASE_URL=http://10.1.0.176:11434
     depends_on:
-      qdrant:
-        condition: service_started
+      # --- CORRECCIÓN CLAVE ---
+      # Ahora el backend depende de AMBAS condiciones:
+      # 1. Que el ingestor termine correctamente.
+      # 2. Que Qdrant esté saludable (implícito por la dependencia del ingestor).
+      ingestor:
+        condition: service_completed_successfully
     restart: always
     networks:
       - chatbot-net
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.rule=Host(`10.1.0.152`) && PathPrefix(`/api`)"
-      # --- CORRECCIÓN AÑADIDA ---
-      # 1. Definimos un middleware llamado 'strip-api' que elimina el prefijo '/api'.
       - "traefik.http.middlewares.strip-api.stripprefix.prefixes=/api"
-      # 2. Aplicamos ese middleware al enrutador del backend.
       - "traefik.http.routers.backend.middlewares=strip-api"
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
 
@@ -325,7 +334,6 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
     environment:
-      # Esta URL sigue siendo correcta, el frontend no necesita cambiar
       - API_URL=http://10.1.0.152/api/chat
     depends_on:
       - backend
