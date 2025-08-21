@@ -13,7 +13,7 @@ QDRANT_URL = "http://localhost:6333"
 QDRANT_COLLECTION_NAME = "contabilidad_unificada"
 OLLAMA_BASE_URL = "http://10.1.0.176:11434"
 OLLAMA_EMBEDDING_MODEL = "nomic-embed-text:latest"
-OLLAMA_GENERATION_MODEL = "llama3.1:latest"
+OLLAMA_GENERATION_MODEL = "gpt-oss:20b"
 OLLAMA_ROUTING_MODEL = "llama3.1:latest"
 
 # --- 1. Cargar los recursos necesarios ---
