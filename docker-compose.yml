@@ -243,6 +243,7 @@
 #version: '3.8'
 
 # docker-compose.yml (Versión final para despliegue)
+# docker-compose.yml (Versión final para despliegue)
 version: '3.8'
 
 services:
@@ -257,8 +258,8 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
     ports:
-      - "80:80"      # Puerto para el tráfico web
-      - "8080:8080"  # Dashboard de Traefik para monitoreo
+      - "80:80"
+      - "8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
@@ -277,9 +278,13 @@ services:
       - chatbot-net
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
-      interval: 5s
-      timeout: 3s
+      interval: 10s
+      timeout: 5s
       retries: 5
+      # --- CORRECCIÓN AÑADIDA ---
+      # Le da a Qdrant 30 segundos para arrancar antes de que el healthcheck
+      # empiece a considerarse para el estado del contenedor.
+      start_period: 45s
 
   # --------------------------------------------------------------------
   # 3. Ingestor de Datos
@@ -310,10 +315,6 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - OLLAMA_BASE_URL=http://10.1.0.176:11434
     depends_on:
-      # --- CORRECCIÓN CLAVE ---
-      # Ahora el backend depende de AMBAS condiciones:
-      # 1. Que el ingestor termine correctamente.
-      # 2. Que Qdrant esté saludable (implícito por la dependencia del ingestor).
       ingestor:
         condition: service_completed_successfully
     restart: always
