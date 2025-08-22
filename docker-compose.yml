@@ -191,24 +191,39 @@ services:
   # --------------------------------------------------------------------
   # 4. Backend (API FastAPI)
   # --------------------------------------------------------------------
+  # backend:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.backend
+  #   environment:
+  #     - QDRANT_URL=http://qdrant:6333
+  #     - OLLAMA_BASE_URL=http://10.1.0.176:11434
+  #   depends_on:
+  #     ingestor:
+  #       condition: service_completed_successfully
+  #   restart: always
+  #   networks:
+  #     - private-gpt_default # <-- Conectado a la red externa
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.backend.rule=Host(`api.chatbot.tu-empresa.com`)"
+  #     - "traefik.http.services.backend.loadbalancer.server.port=8000"
+
+
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
+    ports:
+      - "8000:8000"
     environment:
       - QDRANT_URL=http://qdrant:6333
       - OLLAMA_BASE_URL=http://10.1.0.176:11434
     depends_on:
-      ingestor:
-        condition: service_completed_successfully
+      - ingestor
     restart: always
-    networks:
-      - private-gpt_default # <-- Conectado a la red externa
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=Host(`api.chatbot.tu-empresa.com`)"
-      - "traefik.http.services.backend.loadbalancer.server.port=8000"
-
+    networks: # <-- CAMBIO FUNDAMENTAL: Conectado a la red
+      - private-gpt_default
   # --------------------------------------------------------------------
   # 5. Frontend (Streamlit)
   # --------------------------------------------------------------------
