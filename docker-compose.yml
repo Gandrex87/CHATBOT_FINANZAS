@@ -1,7 +1,7 @@
 # # docker-compose.yml
 
 
-
+#La base:
 # services:
 #   qdrant:
 #     image: qdrant/qdrant:latest
@@ -64,20 +64,123 @@
 
 # docker-compose.yml (Versión Corregida para Servidor, sin Healthcheck)
 
+# #Opc 2:
+# services:
+#   qdrant:
+#     image: qdrant/qdrant:latest
+#     ports:
+#       - "6333:6333"
+#     volumes:
+#       - qdrant_data:/qdrant/storage
+#     # AÑADIDO: Variable de entorno para asegurar que el puerto HTTP esté activo
+#     environment:
+#       - QDRANT__SERVICE__HTTP_PORT=6333
+#     restart: always
+#     networks:
+#       - private-gpt_default
+
+#   ingestor:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.backend
+#     command: python ingest.py
+#     environment:
+#       - QDRANT_URL=http://qdrant:6333
+#       - OLLAMA_BASE_URL=http://10.1.0.176:11434
+#     depends_on:
+#       - qdrant
+#     networks: # <-- CAMBIO FUNDAMENTAL: Conectado a la red
+#       - private-gpt_default
+#     restart: on-failure # <-- AÑADIDO: Estrategia de reintento simple
+
+#   backend:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.backend
+#     ports:
+#       - "8000:8000"
+#     environment:
+#       - QDRANT_URL=http://qdrant:6333
+#       - OLLAMA_BASE_URL=http://10.1.0.176:11434
+#     depends_on:
+#       - ingestor
+#     restart: always
+#     networks: # <-- CAMBIO FUNDAMENTAL: Conectado a la red
+#       - private-gpt_default
+
+
+
+#   frontend:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.frontend
+#     # 1. Asegúrate de que los puertos NO estén expuestos directamente
+#     # ports:
+#     #   - "8501:8501"
+#     environment:
+#       - API_URL=http://backend:8000/chat
+#     depends_on:
+#       - backend
+#     restart: always
+#     networks:
+#       - private-gpt_default # O la red que estés usando
+#     # 2. Añade estas etiquetas para que Traefik lo gestione
+#     labels:
+#       - "traefik.enable=true"
+#       - "traefik.http.routers.frontend.rule=Host(`chatbot.localhost`)"
+#       - "traefik.http.services.frontend.loadbalancer.server.port=8501"
+
+# networks:
+#   private-gpt_default:
+#     external: true
+
+# volumes:
+#   qdrant_data:
+
 services:
+  # --------------------------------------------------------------------
+  # 1. Proxy Inverso Traefik (Servicio que faltaba)
+  # --------------------------------------------------------------------
+  traefik:
+    image: traefik:v2.10
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"     # Puerto para el tráfico web
+      - "8080:8080" # Puerto para el dashboard de Traefik
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - private-gpt_default # Debe estar en la misma red
+    restart: always
+
+  # --------------------------------------------------------------------
+  # 2. Base de Datos Vectorial Qdrant
+  # --------------------------------------------------------------------
   qdrant:
     image: qdrant/qdrant:latest
-    ports:
-      - "6333:6333"
+    # ports: # Eliminado: No se expone directamente en producción
+    #   - "6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
-    # AÑADIDO: Variable de entorno para asegurar que el puerto HTTP esté activo
     environment:
       - QDRANT__SERVICE__HTTP_PORT=6333
     restart: always
     networks:
       - private-gpt_default
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
 
+  # --------------------------------------------------------------------
+  # 3. Ingestor de Datos
+  # --------------------------------------------------------------------
   ingestor:
     build:
       context: .
@@ -87,64 +190,62 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - OLLAMA_BASE_URL=http://10.1.0.176:11434
     depends_on:
-      - qdrant
-    networks: # <-- CAMBIO FUNDAMENTAL: Conectado a la red
+      qdrant:
+        condition: service_healthy # Dependencia robusta
+    networks:
       - private-gpt_default
-    restart: on-failure # <-- AÑADIDO: Estrategia de reintento simple
+    restart: on-failure
 
+  # --------------------------------------------------------------------
+  # 4. Backend (API FastAPI)
+  # --------------------------------------------------------------------
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    ports:
-      - "8000:8000"
+    # ports: # Eliminado: No se expone directamente
+    #   - "8000:8000"
     environment:
       - QDRANT_URL=http://qdrant:6333
       - OLLAMA_BASE_URL=http://10.1.0.176:11434
     depends_on:
-      - ingestor
+      ingestor:
+        condition: service_completed_successfully # Dependencia robusta
+      qdrant:
+        condition: service_healthy
     restart: always
-    networks: # <-- CAMBIO FUNDAMENTAL: Conectado a la red
+    networks:
       - private-gpt_default
+    labels:
+      - "traefik.enable=true"
+      # Opcional: Si quieres exponer la API en api.tudominio.com
+      - "traefik.http.routers.backend.rule=Host(`api.chatbot.tu-empresa.com`)"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
 
-  # frontend:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.frontend
-  #   ports:
-  #     - "8501:8501"
-  #   environment:
-  #     - API_URL=http://backend:8000/chat
-  #   depends_on:
-  #     - backend
-  #   restart: always
-  #   networks:
-  #     - private-gpt_default
 
+  # --------------------------------------------------------------------
+  # 5. Frontend (Streamlit)
+  # --------------------------------------------------------------------
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-    # 1. Asegúrate de que los puertos NO estén expuestos directamente
-    # ports:
-    #   - "8501:8501"
     environment:
       - API_URL=http://backend:8000/chat
     depends_on:
       - backend
     restart: always
     networks:
-      - private-gpt_default # O la red que estés usando
-    # 2. Añade estas etiquetas para que Traefik lo gestione
+      - private-gpt_default
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`chatbot.localhost`)"
+      # Cambia 'chatbot.tu-empresa.com' por tu dominio real
+      - "traefik.http.routers.frontend.rule=Host(`chatbot.tu-empresa.com`)"
       - "traefik.http.services.frontend.loadbalancer.server.port=8501"
-
-networks:
-  private-gpt_default:
-    external: true
 
 volumes:
   qdrant_data:
 
+networks:
+  private-gpt_default:
+    external: true
