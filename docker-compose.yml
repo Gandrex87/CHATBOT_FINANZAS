@@ -191,43 +191,38 @@ services:
   # --------------------------------------------------------------------
   # 4. Backend (API FastAPI)
   # --------------------------------------------------------------------
-  # backend:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.backend
-  #   environment:
-  #     - QDRANT_URL=http://qdrant:6333
-  #     - OLLAMA_BASE_URL=http://10.1.0.176:11434
-  #   depends_on:
-  #     ingestor:
-  #       condition: service_completed_successfully
-  #   restart: always
-  #   networks:
-  #     - private-gpt_default # <-- Conectado a la red externa
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.http.routers.backend.rule=Host(`api.chatbot.tu-empresa.com`)"
-  #     - "traefik.http.services.backend.loadbalancer.server.port=8000"
-
-
+  # --------------------------------------------------------------------
+  # 4. Backend (API FastAPI) - VERSIÓN CORREGIDA
+  # --------------------------------------------------------------------
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    ports:
-      - "8000:8000"
     environment:
       - QDRANT_URL=http://qdrant:6333
       - OLLAMA_BASE_URL=http://10.1.0.176:11434
     depends_on:
-      - ingestor
+      ingestor:
+        condition: service_completed_successfully
+      qdrant:
+        condition: service_healthy
     restart: always
-    networks: # <-- CAMBIO FUNDAMENTAL: Conectado a la red
+    networks:
       - private-gpt_default
+    labels:
+      - "traefik.enable=true"
+      # CORRECCIÓN: La regla ahora se activa con la IP Y la ruta /api
+      - "traefik.http.routers.backend.rule=Host(`10.1.0.152`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.backend.priority=2" # Prioridad más alta
+      # CORRECCIÓN: Le decimos a Traefik que elimine "/api" de la URL antes de enviarla al backend
+      - "traefik.http.routers.backend.middlewares=strip-api-prefix"
+      - "traefik.http.middlewares.strip-api-prefix.stripprefix.prefixes=/api"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
+
   # --------------------------------------------------------------------
   # 5. Frontend (Streamlit)
   # --------------------------------------------------------------------
-  frontend:
+frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
@@ -237,10 +232,13 @@ services:
       - backend
     restart: always
     networks:
-      - private-gpt_default # <-- Conectado a la red externa
+      - private-gpt_default
     labels:
       - "traefik.enable=true"
+      # CORRECCIÓN: Le decimos a Traefik que esta es la ruta principal
       - "traefik.http.routers.frontend.rule=Host(`10.1.0.152`)"
+      # CORRECCIÓN: Damos una prioridad más baja para que las rutas más específicas se evalúen primero
+      - "traefik.http.routers.frontend.priority=1"
       - "traefik.http.services.frontend.loadbalancer.server.port=8501"
 
 # --- Definición de la Red Externa y el Volumen ---
