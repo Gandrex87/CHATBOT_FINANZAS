@@ -160,23 +160,42 @@ services:
   # --------------------------------------------------------------------
   # 2. Base de Datos Vectorial Qdrant
   # --------------------------------------------------------------------
+  # qdrant:
+  #   image: qdrant/qdrant:latest
+  #   # ports: # Eliminado: No se expone directamente en producción
+  #   #   - "6333:6333"
+  #   volumes:
+  #     - qdrant_data:/qdrant/storage
+  #   environment:
+  #     - QDRANT__SERVICE__HTTP_PORT=6333
+  #   restart: always
+  #   networks:
+  #     - private-gpt_default
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 60s
+
   qdrant:
     image: qdrant/qdrant:latest
-    # ports: # Eliminado: No se expone directamente en producción
-    #   - "6333:6333"
+    # No exponemos puertos, Traefik lo gestiona si fuera necesario
     volumes:
       - qdrant_data:/qdrant/storage
+    # --- ASEGÚRATE DE QUE ESTA SECCIÓN ESTÉ PRESENTE ---
     environment:
+      # Forzamos a Qdrant a habilitar el servicio HTTP en el puerto 6333
       - QDRANT__SERVICE__HTTP_PORT=6333
     restart: always
     networks:
-      - private-gpt_default
+      - private-gpt_default # O la red que estés usando
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 60s
+      start_period: 45s
 
   # --------------------------------------------------------------------
   # 3. Ingestor de Datos
@@ -240,7 +259,8 @@ services:
     labels:
       - "traefik.enable=true"
       # Cambia 'chatbot.tu-empresa.com' por tu dominio real
-      - "traefik.http.routers.frontend.rule=Host(`chatbot.tu-empresa.com`)"
+      - "traefik.http.routers.frontend.rule=Host(`10.1.0.152`)"
+     #- "traefik.http.routers.frontend.rule=Host(`chatbot.tu-empresa.com`)"
       - "traefik.http.services.frontend.loadbalancer.server.port=8501"
 
 volumes:
