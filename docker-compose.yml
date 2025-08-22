@@ -155,7 +155,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
-      - chatbot_network  # <-- CORREGIDO: misma red para todos
+      - private-gpt_default  # <-- Usando la red existente
     restart: always
 
   # --------------------------------------------------------------------
@@ -169,7 +169,7 @@ services:
       - QDRANT__SERVICE__HTTP_PORT=6333
     restart: always
     networks:
-      - chatbot_network  # <-- CORREGIDO: misma red para todos
+      - private-gpt_default  # <-- Usando la red existente
 
   # --------------------------------------------------------------------
   # 3. Ingestor de Datos
@@ -185,7 +185,7 @@ services:
     depends_on:
       - qdrant
     networks:
-      - chatbot_network  # <-- CORREGIDO: misma red para todos
+      - private-gpt_default  # <-- Usando la red existente
     restart: "no"  # <-- CORREGIDO: solo ejecutar una vez
 
   # --------------------------------------------------------------------
@@ -202,7 +202,7 @@ services:
       - qdrant
     restart: always
     networks:
-      - chatbot_network
+      - private-gpt_default
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.rule=Host(`10.1.0.152`) && PathPrefix(`/chat`)"
@@ -221,7 +221,7 @@ services:
       - backend
     restart: always
     networks:
-      - chatbot_network
+      - private-gpt_default
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.frontend.rule=Host(`10.1.0.152`)"
@@ -233,5 +233,5 @@ volumes:
   qdrant_data:
 
 networks:
-  chatbot_network:  # <-- CORREGIDO: red interna, no externa
-    driver: bridge
+  private-gpt_default:  # <-- Usando la red existente
+    external: true
