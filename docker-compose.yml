@@ -155,7 +155,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
-      - private-gpt_default # <-- Conectado a la red externa
+      - chatbot_network  # <-- CORREGIDO: misma red para todos
     restart: always
 
   # --------------------------------------------------------------------
@@ -169,7 +169,7 @@ services:
       - QDRANT__SERVICE__HTTP_PORT=6333
     restart: always
     networks:
-      - private-gpt_default # <-- Conectado a la red externa
+      - chatbot_network  # <-- CORREGIDO: misma red para todos
 
   # --------------------------------------------------------------------
   # 3. Ingestor de Datos
@@ -185,8 +185,8 @@ services:
     depends_on:
       - qdrant
     networks:
-      - private-gpt_default # <-- Conectado a la red externa
-    restart: on-failure
+      - chatbot_network  # <-- CORREGIDO: misma red para todos
+    restart: "no"  # <-- CORREGIDO: solo ejecutar una vez
 
   # --------------------------------------------------------------------
   # 4. Backend (API FastAPI)
@@ -224,13 +224,14 @@ services:
       - chatbot_network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`10.1.0.152`) && !PathPrefix(`/chat`)"
+      - "traefik.http.routers.frontend.rule=Host(`10.1.0.152`)"
       - "traefik.http.services.frontend.loadbalancer.server.port=8501"
+      - "traefik.http.routers.frontend.priority=1"  # <-- AGREGADO: menor prioridad que backend
 
-# --- Definición de la Red Externa y el Volumen ---
+# --- Definición de la Red y el Volumen ---
 volumes:
   qdrant_data:
 
 networks:
-  private-gpt_default:
-    external: true
+  chatbot_network:  # <-- CORREGIDO: red interna, no externa
+    driver: bridge
