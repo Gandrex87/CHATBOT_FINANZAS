@@ -1,8 +1,7 @@
 # Entornos virtuales de Python
 venv/
 .venv/
-env/
-.env/
+
 
 # Archivos de caché y compilados de Python
 __pycache__/
@@ -35,7 +34,7 @@ README.md
 .gitignore
 
 # Archivos sensibles
-.env
+
 
 # Archivos de configuración de Docker
 docker-compose.yml

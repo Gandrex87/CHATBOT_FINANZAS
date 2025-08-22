@@ -1,237 +1,63 @@
-# # docker-compose.yml
-
-
-#La base:
-# services:
-#   qdrant:
-#     image: qdrant/qdrant:latest
-#     ports:
-#       - "6333:6333"
-#     volumes:
-#       - qdrant_data:/qdrant/storage
-#     restart: always
-#     networks:
-#       - private-gpt_default
-
-#   ingestor:
-#     build:
-#       context: .
-#       dockerfile: Dockerfile.backend
-#     command: python ingest.py
-#     environment:
-#       - QDRANT_URL=http://qdrant:6333
-#       # --- CAMBIO CLAVE ---
-#       - OLLAMA_BASE_URL=http://10.1.0.176:11434
-#     depends_on:
-#       - qdrant
-
-#   backend:
-#     build:
-#       context: .
-#       dockerfile: Dockerfile.backend
-#     ports:
-#       - "8000:8000"
-#     environment:
-#       - QDRANT_URL=http://qdrant:6333
-#       # --- Y TAMBIÉN AQUÍ ---
-#       - OLLAMA_BASE_URL=http://10.1.0.176:11434
-#     depends_on:
-#       - ingestor
-#     restart: always
-
-#   frontend:
-#     build:
-#       context: .
-#       dockerfile: Dockerfile.frontend
-#     ports:
-#       - "8501:8501"
-#     environment:
-#       - API_URL=http://backend:8000/chat
-#     depends_on:
-#       - backend
-#     restart: always
-#     networks:
-#       - private-gpt_default
-
-# networks:
-#   private-gpt_default:
-#     external: true
-
-# volumes:
-#   qdrant_data:
-
-# docker-compose.yml (Versión Corregida para Servidor)
-
-# docker-compose.yml (Versión Corregida para Servidor, sin Healthcheck)
-
-# #Opc 2:
-# services:
-#   qdrant:
-#     image: qdrant/qdrant:latest
-#     ports:
-#       - "6333:6333"
-#     volumes:
-#       - qdrant_data:/qdrant/storage
-#     # AÑADIDO: Variable de entorno para asegurar que el puerto HTTP esté activo
-#     environment:
-#       - QDRANT__SERVICE__HTTP_PORT=6333
-#     restart: always
-#     networks:
-#       - private-gpt_default
-
-#   ingestor:
-#     build:
-#       context: .
-#       dockerfile: Dockerfile.backend
-#     command: python ingest.py
-#     environment:
-#       - QDRANT_URL=http://qdrant:6333
-#       - OLLAMA_BASE_URL=http://10.1.0.176:11434
-#     depends_on:
-#       - qdrant
-#     networks: # <-- CAMBIO FUNDAMENTAL: Conectado a la red
-#       - private-gpt_default
-#     restart: on-failure # <-- AÑADIDO: Estrategia de reintento simple
-
-#   backend:
-#     build:
-#       context: .
-#       dockerfile: Dockerfile.backend
-#     ports:
-#       - "8000:8000"
-#     environment:
-#       - QDRANT_URL=http://qdrant:6333
-#       - OLLAMA_BASE_URL=http://10.1.0.176:11434
-#     depends_on:
-#       - ingestor
-#     restart: always
-#     networks: # <-- CAMBIO FUNDAMENTAL: Conectado a la red
-#       - private-gpt_default
-
-
-
-#   frontend:
-#     build:
-#       context: .
-#       dockerfile: Dockerfile.frontend
-#     # 1. Asegúrate de que los puertos NO estén expuestos directamente
-#     # ports:
-#     #   - "8501:8501"
-#     environment:
-#       - API_URL=http://backend:8000/chat
-#     depends_on:
-#       - backend
-#     restart: always
-#     networks:
-#       - private-gpt_default # O la red que estés usando
-#     # 2. Añade estas etiquetas para que Traefik lo gestione
-#     labels:
-#       - "traefik.enable=true"
-#       - "traefik.http.routers.frontend.rule=Host(`chatbot.localhost`)"
-#       - "traefik.http.services.frontend.loadbalancer.server.port=8501"
-
-# networks:
-#   private-gpt_default:
-#     external: true
-
-# volumes:
-#   qdrant_data:
-
+# docker-compose.yml
 
 services:
-  # --------------------------------------------------------------------
-  # 1. Proxy Inverso Traefik
-  # --------------------------------------------------------------------
-  traefik:
-    image: traefik:v2.10
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-    ports:
-      - "80:80"
-      - "8080:8080"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks:
-      - private-gpt_default  # <-- Usando la red existente
-    restart: always
-
-  # --------------------------------------------------------------------
-  # 2. Base de Datos Vectorial Qdrant
-  # --------------------------------------------------------------------
+  # Nuevo servicio para la base de datos vectorial
   qdrant:
     image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
-    environment:
-      - QDRANT__SERVICE__HTTP_PORT=6333
-    restart: always
-    networks:
-      - private-gpt_default  # <-- Usando la red existente
 
-  # --------------------------------------------------------------------
-  # 3. Ingestor de Datos
-  # --------------------------------------------------------------------
-  ingestor:
+  ingest:
     build:
       context: .
       dockerfile: Dockerfile.backend
     command: python ingest.py
+    volumes:
+      - .:/app
     environment:
-      - QDRANT_URL=http://qdrant:6333
-      - OLLAMA_BASE_URL=http://10.1.0.176:11434
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
+      - QDRANT_URL=${QDRANT_URL}
+      - QDRANT_COLLECTION_NAME=${QDRANT_COLLECTION_NAME}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL}
     depends_on:
-      - qdrant
-    networks:
-      - private-gpt_default  # <-- Usando la red existente
-    restart: "no"  # <-- CORREGIDO: solo ejecutar una vez
-
-  # --------------------------------------------------------------------
-  # 4. Backend (API FastAPI)
-  # --------------------------------------------------------------------
+      - qdrant # Esperar
+      
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
     environment:
-      - QDRANT_URL=http://qdrant:6333
-      - OLLAMA_BASE_URL=http://10.1.0.176:11434
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
+      - QDRANT_URL=${QDRANT_URL}
+      - QDRANT_COLLECTION_NAME=${QDRANT_COLLECTION_NAME}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL}
+      - OLLAMA_GENERATION_MODEL=${OLLAMA_GENERATION_MODEL}
+      - OLLAMA_ROUTING_MODEL=${OLLAMA_ROUTING_MODEL}
     depends_on:
-      - qdrant
-    restart: always
-    networks:
-      - private-gpt_default
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=Host(`10.1.0.152`) && PathPrefix(`/chat`)"
-      - "traefik.http.services.backend.loadbalancer.server.port=8000"
+      qdrant: # También depende de Qdrant
+        condition: service_started
+      ingest: # Espera a que la ingesta termine con éxito
+        condition: service_completed_successfully
 
-  # --------------------------------------------------------------------
-  # 5. Frontend (Streamlit)
-  # --------------------------------------------------------------------
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./frontend.py:/app/frontend.py
     environment:
-      - API_URL=http://10.1.0.152/chat
+      - API_URL=http://backend:8000/chat
     depends_on:
       - backend
-    restart: always
-    networks:
-      - private-gpt_default
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`10.1.0.152`)"
-      - "traefik.http.services.frontend.loadbalancer.server.port=8501"
-      - "traefik.http.routers.frontend.priority=1"  # <-- AGREGADO: menor prioridad que backend
 
-# --- Definición de la Red y el Volumen ---
 volumes:
+  # Volumen para persistir los datos de Qdrant
   qdrant_data:
-
-networks:
-  private-gpt_default:  # <-- Usando la red existente
-    external: true

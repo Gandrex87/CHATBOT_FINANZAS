@@ -72,6 +72,44 @@ def create_bm25_index(chunks: list):
         pickle.dump(bm25, f)
     print(f"Índice BM25 guardado en '{BM25_INDEX_FILE}'.")
 
+# def index_in_qdrant(client: QdrantClient, chunks: list, embeddings_model: OllamaEmbeddings):
+#     """Genera embeddings y los indexa en Qdrant en lotes."""
+#     print("\nIniciando indexación en Qdrant...")
+#     client.recreate_collection(
+#         collection_name=QDRANT_COLLECTION_NAME,
+#         vectors_config=models.VectorParams(size=VECTOR_DIMENSION, distance=models.Distance.COSINE),
+#     )
+#     print(f"Colección '{QDRANT_COLLECTION_NAME}' creada/recreada.")
+
+#     batch_size = 64
+#     total_chunks = len(chunks)
+#     for i in range(0, total_chunks, batch_size):
+#         batch_chunks = chunks[i:i+batch_size]
+#         texts_to_embed = [chunk['contextualized_chunk'] for chunk in batch_chunks]
+        
+#         print(f"Procesando lote {i//batch_size + 1}/{(total_chunks + batch_size - 1)//batch_size}...")
+#         embeddings = embeddings_model.embed_documents(texts_to_embed)
+        
+#         points_to_upload = [
+#             models.PointStruct(
+#                 id=i+j,
+#                 vector=embeddings[j],
+#                 payload={
+#                     "original_chunk": chunk_data["original_chunk"],
+#                     "generated_context": chunk_data["generated_context"],
+#                     "parent_doc_index": chunk_data["parent_doc_index"]
+#                 }
+#             ) for j, chunk_data in enumerate(batch_chunks)
+#         ]
+        
+#         client.upsert(
+#             collection_name=QDRANT_COLLECTION_NAME,
+#             points=points_to_upload,
+#             wait=True
+#         )
+#     print("\n¡Indexación en Qdrant completada con éxito!")
+
+
 def index_in_qdrant(client: QdrantClient, chunks: list, embeddings_model: OllamaEmbeddings):
     """Genera embeddings y los indexa en Qdrant en lotes."""
     print("\nIniciando indexación en Qdrant...")
@@ -97,7 +135,10 @@ def index_in_qdrant(client: QdrantClient, chunks: list, embeddings_model: Ollama
                 payload={
                     "original_chunk": chunk_data["original_chunk"],
                     "generated_context": chunk_data["generated_context"],
-                    "parent_doc_index": chunk_data["parent_doc_index"]
+                    "parent_doc_index": chunk_data["parent_doc_index"],
+                    # --- LÍNEA AÑADIDA ---
+                    # Añadimos la clave 'source' al payload, leyéndola del chunk
+                    "source": chunk_data["source"] 
                 }
             ) for j, chunk_data in enumerate(batch_chunks)
         ]
