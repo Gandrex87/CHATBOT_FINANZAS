@@ -137,9 +137,10 @@
 # volumes:
 #   qdrant_data:
 
+
 services:
   # --------------------------------------------------------------------
-  # 1. Proxy Inverso Traefik (Servicio que faltaba)
+  # 1. Proxy Inverso Traefik
   # --------------------------------------------------------------------
   traefik:
     image: traefik:v2.10
@@ -149,53 +150,26 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
     ports:
-      - "80:80"     # Puerto para el tráfico web
-      - "8080:8080" # Puerto para el dashboard de Traefik
+      - "80:80"
+      - "8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
-      - private-gpt_default # Debe estar en la misma red
+      - private-gpt_default # <-- Conectado a la red externa
     restart: always
 
   # --------------------------------------------------------------------
   # 2. Base de Datos Vectorial Qdrant
   # --------------------------------------------------------------------
-  # qdrant:
-  #   image: qdrant/qdrant:latest
-  #   # ports: # Eliminado: No se expone directamente en producción
-  #   #   - "6333:6333"
-  #   volumes:
-  #     - qdrant_data:/qdrant/storage
-  #   environment:
-  #     - QDRANT__SERVICE__HTTP_PORT=6333
-  #   restart: always
-  #   networks:
-  #     - private-gpt_default
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-  #     start_period: 60s
-
   qdrant:
     image: qdrant/qdrant:latest
-    # No exponemos puertos, Traefik lo gestiona si fuera necesario
     volumes:
       - qdrant_data:/qdrant/storage
-    # --- ASEGÚRATE DE QUE ESTA SECCIÓN ESTÉ PRESENTE ---
     environment:
-      # Forzamos a Qdrant a habilitar el servicio HTTP en el puerto 6333
       - QDRANT__SERVICE__HTTP_PORT=6333
     restart: always
     networks:
-      - private-gpt_default # O la red que estés usando
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 45s
+      - private-gpt_default # <-- Conectado a la red externa
 
   # --------------------------------------------------------------------
   # 3. Ingestor de Datos
@@ -209,10 +183,9 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - OLLAMA_BASE_URL=http://10.1.0.176:11434
     depends_on:
-      qdrant:
-        condition: service_healthy # Dependencia robusta
+      - qdrant
     networks:
-      - private-gpt_default
+      - private-gpt_default # <-- Conectado a la red externa
     restart: on-failure
 
   # --------------------------------------------------------------------
@@ -222,25 +195,19 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    # ports: # Eliminado: No se expone directamente
-    #   - "8000:8000"
     environment:
       - QDRANT_URL=http://qdrant:6333
       - OLLAMA_BASE_URL=http://10.1.0.176:11434
     depends_on:
       ingestor:
-        condition: service_completed_successfully # Dependencia robusta
-      qdrant:
-        condition: service_healthy
+        condition: service_completed_successfully
     restart: always
     networks:
-      - private-gpt_default
+      - private-gpt_default # <-- Conectado a la red externa
     labels:
       - "traefik.enable=true"
-      # Opcional: Si quieres exponer la API en api.tudominio.com
       - "traefik.http.routers.backend.rule=Host(`api.chatbot.tu-empresa.com`)"
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
-
 
   # --------------------------------------------------------------------
   # 5. Frontend (Streamlit)
@@ -255,14 +222,13 @@ services:
       - backend
     restart: always
     networks:
-      - private-gpt_default
+      - private-gpt_default # <-- Conectado a la red externa
     labels:
       - "traefik.enable=true"
-      # Cambia 'chatbot.tu-empresa.com' por tu dominio real
       - "traefik.http.routers.frontend.rule=Host(`10.1.0.152`)"
-     #- "traefik.http.routers.frontend.rule=Host(`chatbot.tu-empresa.com`)"
       - "traefik.http.services.frontend.loadbalancer.server.port=8501"
 
+# --- Definición de la Red Externa y el Volumen ---
 volumes:
   qdrant_data:
 
